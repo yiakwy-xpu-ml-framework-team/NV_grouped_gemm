@@ -6,7 +6,6 @@ from sys import stderr
 import torch.cuda.nvtx as nvtx
 
 
-
 class GroupedGemm(torch.autograd.Function):
 
     @staticmethod
@@ -57,7 +56,8 @@ class PermuteMoE_topK(torch.autograd.Function):
   def forward(ctx, 
               input_act: torch.Tensor,
               indices: torch.Tensor,
-              max_token_num: int):
+              max_token_num: int = 0,
+              use_fast_permute: bool = False):
     '''
     indices: for topK=1, indices in a 1-d tensor of shape [num_tokens],
              otherwise, it's a 2-d tensor of shape [num_tokens, topK]
@@ -76,7 +76,7 @@ class PermuteMoE_topK(torch.autograd.Function):
       raise RuntimeError("[Error] The input `input_act` of permute_topK op is on the device: CPU!")
     if indices.is_cpu:
       warnings.warn("The input `indices` of permute_topK op is on the device: CPU!")
-      expert_for_rows = expert_for_rows.cuda()
+      indices = indices.cuda()
 
     # Shape check
     if input_act.size(0) != indices.size(0):
@@ -108,12 +108,15 @@ class PermuteMoE_topK(torch.autograd.Function):
       PermuteMoE_topK.dtype = input_act.dtype
       PermuteMoE_topK.workspace_fw = []
 
+    # TODO (yiakwy) : activate `use_fast_permute`
     permuted_act, row_id_map, PermuteMoE_topK.workspace_fw = backend.permute(
       input_act,
       indices,
       PermuteMoE_topK.workspace_fw,
-      PermuteMoE_topK.max_expanded_token_num)
+      PermuteMoE_topK.max_expanded_token_num,
+      use_fast_permute)
 
+    # NOTE(yiakwy) : row_id_map is source indices ([num_tokens, num_tok] in column layout) to dest index location
     ctx.row_id_map = row_id_map
     ctx.num_tokens = indices.size(0)
     ctx.num_topK = num_topK
@@ -126,7 +129,7 @@ class PermuteMoE_topK(torch.autograd.Function):
     nvtx.range_push("permute_topK backward")
     # Empty input check
     if not permuted_act_grad.numel():
-      return permuted_act_grad, None, None
+      return permuted_act_grad, None, None, None
 
     if not permuted_act_grad.is_contiguous():
       permuted_act_grad = permuted_act_grad.contiguous()
@@ -142,7 +145,7 @@ class PermuteMoE_topK(torch.autograd.Function):
       num_tokens,
       num_topK)
     nvtx.range_pop()
-    return unpermuted_act_grad, None, None
+    return unpermuted_act_grad, None, None, None
 
 ################################################################################################
 ##
@@ -241,8 +244,14 @@ class UnpermuteMoE_topK(torch.autograd.Function):
     nvtx.range_pop()
     return act_grad, None, prob_grad
 
-def permute(input_act, indices, max_token_num=0):
-  return PermuteMoE_topK.apply(input_act, indices, max_token_num)
+# TODO (yiakwy) : remove
+def permute(input_act, indices, max_token_num=0, use_fast_permute=False):
+  return PermuteMoE_topK.apply(input_act, indices, max_token_num, use_fast_permute)
 
-def unpermute(input_act, row_id_map, probs=None):
-  return UnpermuteMoE_topK.apply(input_act, row_id_map, probs)
+# permute = PermuteMoE_topK.apply
+
+# TODO (yiakwy) : remove
+# def unpermute(input_act, row_id_map, probs=None):
+#   return UnpermuteMoE_topK.apply(input_act, row_id_map, probs)
+
+unpermute = UnpermuteMoE_topK.apply

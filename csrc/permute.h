@@ -16,7 +16,8 @@ std::tuple<torch::Tensor, torch::Tensor, std::vector<Tensor>> moe_permute_topK_o
     Tensor              input,
     Tensor              indices,
     std::vector<Tensor> workspace,
-    int64_t             max_expanded_token_num);
+    int64_t             max_expanded_token_num,
+    bool                use_fast_permute = false);
 
 torch::Tensor moe_recover_topK_op(
     torch::Tensor  input,
@@ -30,17 +31,5 @@ std::tuple<torch::Tensor, torch::Tensor> moe_recover_topK_bwd_op(
     Tensor  input_fwd,
     Tensor  row_id_map,
     Tensor  prob);
-
-// std::tuple<torch::Tensor, torch::Tensor, std::vector<Tensor>> moe_permute_op(
-//     Tensor original_input,
-//     Tensor expert_for_rows,
-//     std::vector<Tensor> workspace,
-//     int64_t max_token_num);
-
-
-// torch::Tensor moe_recover_op(
-//     Tensor permuted_input,
-//     Tensor row_id_map);
-
 
 }  // namespace grouped_gemm

@@ -30,8 +30,8 @@ def gmm(a, b, batch_sizes, trans_a=False, trans_b=False, c=None):
 def sinkhorn(cost, tol=0.0001):
     return backend.sinkhorn(cost, tol)
 
-def permute(input, indices, workspace, max_expanded_token_num):
-    return backend.permute(input, indices, workspace, max_expanded_token_num)
+def permute(input, indices, workspace, max_expanded_token_num, use_fast_permute=False):
+    return backend.permute(input, indices, workspace, max_expanded_token_num, use_fast_permute)
 
 def unpermute(input, row_id_map, prob, max_tokens, num_topK):
     return backend.unpermute(input, row_id_map, prob, max_tokens, num_topK)
